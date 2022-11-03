@@ -1,0 +1,212 @@
+---
+title: "hw3-biostat 675"
+author: "Nianlin Chen"
+date: "11/19/2021"
+output:
+  pdf_document:
+    latex_engine: xelatex
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, echo=FALSE}
+knitr::opts_chunk$set(error = TRUE)
+```
+
+```{r}
+df<- read.table("/Users/cassiechen/Downloads/cancer_tongue_aneu_1.txt")
+library(survival)
+library(dplyr)
+library(SurvRegCensCov)
+```
+
+##Question 1 
+```{r}
+colnames(df) <- c('i','ti','di')
+fit1 <- survfit(Surv(ti,di)~1,data=df,conf.type="plain" )
+```
+## (a) Report the MLE's of beta0 and sigma.
+MLE of Beta0 = 4.96 and sigma = 1.2016
+```{r}
+fit<-WeibullReg(Surv(ti, di) ~ 1,df)
+fit$summary
+beta0 = 4.96
+sigma = 1.2016
+```
+
+## (b) Compute the MLE's of lambda and gamma.
+MLE of lambda = 0.0161 and gamma = 0.8322
+```{r}
+lambda = round(fit$coef[1,1],4)
+gamma = round(fit$coef[2,1],4)
+```
+
+## (c) Report the covariance matrix for (beta0, sigma).
+```{r}
+fit2<-survreg(Surv(ti, di) ~ 1,df)
+d1 = cbind(c(1,0),c(0,sigma))
+cov1 = d1%*%fit2$var%*%t(d1)
+cov1
+```
+
+## (d) Report the covariance matrix for (lambda, gamma).
+```{r}
+x = cbind(c(-exp(-beta0/sigma)/sigma,0),c(beta0*exp(-beta0/sigma)/sigma^2,-1/sigma^2))
+cov2 = x%*%cov1%*%t(x)
+cov2
+```
+
+## (e) Compute the MLE of E[T].
+```{r}
+ET = (1/lambda)^(1/gamma)*gamma(1+1/gamma)
+ET
+```
+
+## Compute the MLE of t0.5.
+MLE of t0.5 is MLE of expectation of Ti, which is 91.93266
+```{r}
+t0.5 = df$ti[min(which(fit1$surv<=0.5))]
+# set s(t0.5) = 1/2, then find t. S(t) = exp(-lambda*t^gamma)
+t0.5_hat = (-log(0.5)/lambda)^(1/gamma)
+t0.5_hat
+```
+
+## Question 2
+## (a) Conduct a Wald test of H0 : gamma= 1 versus H1: gamma != 1.
+since wald test score = 1.7205, which is smaller than 3.84. Therefore, fail to reject H0 :gamma = 1.
+```{r}
+gamma_se= fit$coef[2,2]
+wald_test_score = ((gamma-1)/gamma_se)^2
+wald_test_score
+```
+## (b) Conduct a likelihood ratio test of H0 : gamma= 1 against a two-sided alternative.
+likelihood ratio test score = 1.4, which is smaller than 3.84. Therefore, fail to reject H0: gamma = 1. 
+```{r}
+ft<- survreg(Surv(ti,di) ~ 1,df,dist="exponential")
+lr_test_score = 2*(183.2482-182.4678) 
+lr_test_score
+```
+## (c) Conduct a score test of H0 : gamma = 1 against a two-sided alternative.
+The score test statistics is 21.1568, which is larger than 3.84. Therefore, reject H0. 
+```{r}
+df$score1<- df$di*log(df$ti)-lambda*df$ti*log(df$ti)+df$di
+score <-cumsum(df$score1)[52]
+df$score2<- lambda*df$ti*log(df$ti)^2+df$di
+information_matrix <- cumsum(df$score2)[52]
+score_test = score^2/information_matrix
+score_test
+```
+
+## Question 3 
+```{r}
+library(haven)
+df1 <-read_sas("/Users/cassiechen/Downloads/bmt_lymphoma_1.sas7bdat")
+library(survival)
+```
+## (a) Fit a Weibull regression model containing all main effects, with waiting time measured in years. List the parameter estimates and corresponding estimated standard errors.
+```{r}
+fit2<-WeibullReg(Surv(obs_time, dead) ~ factor(Tx_type)+factor(cancer)+Karnof+ Wait_time,df1)
+fit2$coef
+```
+## (b) Produce a frequency table for Karnofsky score.
+```{r}
+library('plyr')
+count(df1, 'Karnof') 
+```
+## (c) Estimate and interpret the Karnofsky effect from a PH perspective; pay attention to the table you produced in (b). Compute a 95% confidence interval.
+Exp(coef) is hazard ratio. hazard ratio for 0.9476. Therefore, as Karbofsky effect increases by 10 units, h(t) decrease by exp(10*-0.05377)=  0.5840901 time.
+95% confidence interval =(0.9274, 0.9684)  .
+```{r}
+summary(coxph(Surv(obs_time, dead) ~ Karnof, df1))
+exp(10*-0.05377)
+```
+
+## (d) Again, estimate interpret the Karnofsky effect, but from an AFT perspective; pay attention to the table you produced in (b). Compute a 95% confidence interval.
+coef  = 1.07802, which means as Karnofsky effect increase 10 units, survival time will increase coef^10 = 1.07802^10=2.11967 times. 
+95% confidence interval is (1.0535802,1.103024).
+```{r}
+fit2$ETR
+1.07802^10
+c(1.0535802,1.103024)
+```
+
+## (e) Test H0 : sigma = 1 versus H1 : sigma != 1 using the Wald test. Could the exponential model be used for this data set?
+Since Wald test score = 1.932, which is smaller than 3.84. Therefore, fail to reject H0:sigma = 1.
+```{r}
+var.sigma = (1/0.7831^4)*0.1222^2
+var.sigma
+wald_test_score_2 = ((1/0.7831-1)^2/var.sigma)
+wald_test_score_2
+```
+
+## Question 4 
+## (a) Fit a Cox model with CSP.MTX (Zi), LAF (Li) and AGE (Ai) as covariates.Interpret each of the hazard ratios.
+
+hazard ratio for LAF is 0.5810, which means subjects were assigned to airflow isolation room, h(t) decreases 0.5810 times, which indicates decreases GVHD hazard by 41.9%.
+hazard ratio for age is 1.0632, which means age increase 1 unit, h(t) increases 1.0632 times, which indicates increases GVHD hazard by 6%.
+hazard ratio for CSP.MTX is 0.2475, which means compared to subjects do not receive CSP_MTX, subjects who received CSP.MTX, h(t) decreases 0.2475 times, which indicates decreases GVHD hazard by 75.25%.
+```{r}
+library(haven)
+df2 <-read_sas("/Users/cassiechen/Downloads/anemia2.sas7bdat")
+coxmodel2 <-coxph(Surv(obs_time, GVHD)~ LAF+age+CSP_MTX,data = df2)
+summary(coxmodel2)
+```
+## (b) Re-fit the model, with Ai replaced by Ai/5. Compare each parameter estimate to that from (a) and comment on their similarity or differences.
+After replacing age by age/5, noticed that hazard ratio for age becomes larger than the result we got in part(a). However, hazard ratio for LAF and CSP_MTX do not change so much. 
+```{r}
+coxmodel3 <-coxph(Surv(obs_time, GVHD)~ LAF+I(age/5)+CSP_MTX,data = df2)
+summary(coxmodel3)
+```
+
+## (c) Is the treatment effect (i.e., effect of Zi) different for subjects of different ages? Carry out an appropriate Wald test.
+To do a Wald test, H0： difference of beta of Zi  is zero against H1: difference of beta of Zi is not equal to zero. From the Wald test score = 4.6125, which is larger than 3.84.Therefore, reject H0, which indicates that there does exists difference of effect of Zi stratified on different age groups.
+```{r}
+fitage1 <-coxph(Surv(obs_time, GVHD)~ LAF+age*CSP_MTX,data = df2)
+summary(fitage1)
+(-0.1338/0.06230)^2
+```
+
+## (d) Re-evaluate the hypothesis from (c), but this time use a likelihood ratio test. Compare your result to that obtained through the Wald test and comment.
+Noticed that likelihood ratio score is 5.1623, which is larger than 3.84. Therefore, reject H0:there is different in effect of Zi for different age groups. 
+```{r}
+anova(fitage1,coxmodel2,test="Chisq")
+```
+
+## (e) Give interpretations for each HR for the model fitted in (c).
+From the model fitted in (c). HR for LAF is 0.5041, which means subjects were assigned to airflow isolation room will decrease h(t) 0.5041 times,which indicates to decrease hazard fuction by 49.59%. HR for age is 1.1061, which means increase 1 unit age will increase h(t) 1.1061 times. HR for CSP_MTX is 5.5048, which means subjects received CSP_MTX treatment will increase h(t) 5.5048 times. HR for interaction term is 0.8748, which means compared to subjects do not received CSP_MTX, subject who received CSP_MTX increase 1 unit age, will decrease h(t) 0.8748 times, which indicate decrease hazard function by 12.52%. 
+
+## (f) Is the effect of age linear? Support your response empirically by fitting an appropriate main effects model and providing the appropriate plot.
+Fit age as main effect. From the plot below, we can find that plot of survival time and probability is non-linear.  
+```{r}
+library(survminer)
+lmage <- coxph(Surv(obs_time, GVHD)~ age,data = df2)
+ggsurvplot(survfit(lmage), palette= "#2E9FDF", ggtheme = theme_minimal(), df2)
+plot(cox.zph(lmage))
+```
+## Question5
+## (a) Suppose that it is known that S(14) = 0:95 for a subject age 30. If possible, under the assumed model, determine what S(14) would equal if that same subject was actually age 40? If not possible, state what information you are missing.
+S(14) =0.95 for the subject at age 30. log(-log(s(ti))) -log(-log(s(tj)))= 0.06129*10. s(tj) = 0.95. s(ti) = 0.9099.
+
+## (b) Suppose that it is known that S(28) = 0:90 for a subject age 25. If possible, under the assumed model, determine S(56) if that same subject was actually age 50. If not possible, state what information you are missing.
+We cannot calculate S(56) when the subject at age 50. We need information the value s(56) for this subject at age 25. 
+
+
+## Question7 
+## (a) Suppose that the investigator wants the time scale to be weeks rather than days. Re-fit the main effects model (i.e., AGE, CSP.MTX, LAF) and compare your results with those previously obtained.
+It is the same as the previous model.
+```{r}
+df4 = df2
+df4$obs_time = round(df4$obs_time/7,3)
+modelwk <-coxph(Surv(obs_time, GVHD)~ LAF+age+CSP_MTX,data = df4)
+summary(modelwk)
+```
+
+## (b) Fit a main effects model, with AGE, CSP.MTX, and LAF as covariates to the censoring hazard. Based on the results from this model, do you have evidence that the independent censoring assumption is violated? Briely defend your response.
+The main effect are not significant since the p-value are large.The independent censoring assumption is not violated. 
+```{r}
+censering = ifelse(df2$GVHD == 1,0,1)
+coxcensering = coxph(Surv(obs_time,censering)~LAF +age + CSP_MTX,data = df2)
+summary(coxcensering)
+```

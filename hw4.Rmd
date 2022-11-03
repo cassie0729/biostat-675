@@ -1,0 +1,131 @@
+---
+title: "biostat 675 hw4"
+author: "Nianlin Chen"
+date: "12/5/2021"
+output:
+  pdf_document:
+    latex_engine: xelatex
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, echo=FALSE}
+knitr::opts_chunk$set(error = TRUE)
+```
+
+## Question 1
+```{r}
+library(survival)
+library(haven)
+df1 <- read_sas('/Users/cassiechen/Downloads/kidney_ecd_1.sas7bdat')
+```
+## (a) Fit a model which contains only factors known at the time of transplant (t = 0).List the factors that significantly predict death.
+```{r}
+df1$indicator = rep(NA,dim(df1)[1])
+for (i in c(1:dim(df1)[1])) {
+  if (is.na(df1$time_to_death[i]) == TRUE){
+    df1$indicator[i] = 0
+  }else{
+    df1$indicator[i] = 1
+  }
+}
+df1$Ti = ifelse(is.na(df1$time_to_death), df1$time_to_censor, df1$time_to_death)
+fit1 <- coxph(Surv(Ti, indicator)~  male+ diabetes+ECD + age + comorbid,data = df1)
+summary(fit1)
+```
+
+## (b) Interpret the ECD effect from the model from (a).
+coefficient of ECD effect in the model can be found as 0.1255,which means hazard ratio = exp(coef) = 1.1337. For an ECD kidney increases hazard function by 1.1337 times, which means increases death hazard for 13.37%.  
+
+## (c) Fit a model with graft failure (GF) as a time-dependent covariate.
+```{r}
+new_data <- tmerge(df1[,-7],df1,id=idnum, tstop= Ti)
+new_data <- tmerge(new_data,df1,id = idnum,failure = tdc(time_to_GF))
+new_data$indicator[(new_data$tstop != new_data$Ti)&(new_data$indicator== 1)] <- 0
+fit2 <- coxph(Surv(tstart,tstop,indicator)~ male + ECD + age + comorbid +diabetes+failure+cluster(idnum) ,new_data)
+summary(fit2)
+```
+
+## (d) Interpret the hazard ratio for GF.
+hazard ratio for graft failure is 1.6737, which indicates if graft failure occurs, it will increase death hazard by 1.6737 times, or means increase 67.37%.
+
+## (e) Compare the ECD hazard ratios from models (a) and (c). What does this tell you about the nature of the ECD effect?
+hazard ratio of ECD from model in (a) is 1.1337 and from model in (c) is 1.0105. It suggests that ECD effect in model (c) is insignificant compared to ECD effect in model (a). It is because ECD effect will cause graft failure and then increase death hazard.
+
+## Question 2 
+```{r}
+library(haven)
+df2 <- read_sas("/Users/cassiechen/Downloads/asthma_1.sas7bdat")
+```
+
+## (a) Fit a model which assumes proportionality for all covariates. Code BWT as a continuous covariate. Which factors appear to significantly affect asthma incidence?
+```{r}
+df2$Xi <- df2$dt_asthma-df2$dt_birth
+t =df2[which.max(df2$dt_birth),4]
+df2$censor <- 14607 -df2$dt_birth
+df2$indicator <- rep(0,dim(df2)[1])
+df2$indicator[!is.na(df2$Xi)] <- 1
+df2$updated_Xi <- ifelse(df2$indicator == 1, df2$Xi, df2$censor)
+fit3<- coxph(Surv(updated_Xi,indicator)~ urban + bwt + resp_dist + factor(sex),df2)
+summary(fit3)
+```
+From the p-value, covariates bwt, resp_dist, and sex are significant.
+
+## (b) Repeat (a), but code BWT using an indicator for low birth weight (defined as weighing <= 2.5 kg). Compare the parameter estimates with those from (a) and comment on the similarities and/or differences.
+```{r}
+df2$bwt_indicator <- ifelse(df2$bwt <= 2.5, 1, 0)
+fit4 <- coxph(Surv(updated_Xi,indicator)~ urban + bwt_indicator + resp_dist + factor(sex),df2)
+summary(fit4)
+```
+Estimation of bwt changes a lot, from -0.09151 to 0.25327. In the previous model, 1 unit increases in BMI will cause hazard function decrease 0.9125 times. While in this model, 1 unit increases in BMI will cause hazard function increase 1.2882 times. 
+It suggests that higher BMI will cause higher hazard function. 
+
+## (c) Suppose, for part (c) only, that RESP DIST was of no interest, except as an adjustment covariate. Suppose also that you have no knowledge(and no desire to learn) about the nature of the non-proportionality. Fit an appropriate model, and briefly defend your choice.
+Since resp_dist was of no interest, stratified resp_dist.
+```{r}
+fit5 <- coxph(Surv(updated_Xi,indicator)~ urban + factor(sex) + bwt_indicator +  strata(resp_dist),df2)
+summary(fit5)
+```
+
+## (d) Fit a model which assumes that the RESP DIST effect follows a year-specific step function. Interpret the RESP DIST effect, as estimated from this model.
+resp_dist effect for birth in 1995, hazard function increases 2.25 times. For birth in 1996, hazard function increases 2.55 times. For birth in 1997, hazard function increases 1.35 times. For birth in 1998, hazard function increases 1.68 times. For birth in 1999, hazard function increases 1.95 times.
+```{r}
+df2$year <- 1999
+df2$year[df2$dt_birth < 13151] <- 1995
+df2$year[df2$dt_birth < 13516 & df2$dt_birth >= 13151] <- 1996
+df2$year[df2$dt_birth < 13881 & df2$dt_birth >= 13516] <- 1997
+df2$year[df2$dt_birth < 14246 & df2$dt_birth >= 13881] <- 1998
+fit6<- coxph(Surv(updated_Xi, indicator) ~ urban + bwt_indicator +
+resp_dist:strata(year) + factor(sex), df2)
+summary(fit6)
+```
+
+## (e) Plot the age-specific RESP DIST against the year mid-points. Describe the shape of the plot and its implications (if any) for modelling the RESP DIST effect.
+there are two obvious cluster of points shown in the plot. beta for resp_dist decreases as t increases. 
+```{r}
+zp <- cox.zph(fit4, transform = function(t) t)
+plot(zp[3])
+abline(h = fit4$coefficients[3], col = 'red')
+```
+
+## (f) Fit a model wherein the RESP DIST regression coefficient is assumed to change linearly with age (scaled to years). Interpret your parameter estimates.
+1 unit increases in age will decrease resp_dist effect by -0.47, which indicates hazard function decrease by 0.62 times. 
+```{r}
+fit7 <- coxph(Surv(updated_Xi, indicator) ~ urban + bwt_indicator + factor(sex) + resp_dist+ tt(resp_dist),df2, tt = function(x,t,...) x*t)
+summary(fit7)
+scaled_year <- 365*fit7$coefficients[5]
+scaled_year
+exp(scaled_year)
+```
+
+## (g) Based on the model in (f), estimate the age at which are children with and without RESP DIST have equal asthma hazard.
+t = 857/365 = 2.35 ages
+```{r}
+plot(zp[3])
+abline(h = fit4$coefficients[3], col = 'red')
+y1 = abline(coef(fit7)[4:5],col = 'green')
+x = abline(h = 0,col = 'blue')
+locator()
+```

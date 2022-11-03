@@ -1,0 +1,76 @@
+---
+title: "BIOSTAT675 - hw1"
+author: "Nianlin Chen"
+date: "9/22/2021"
+output:
+  pdf_document:
+    latex_engine: xelatex
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, echo=FALSE}
+knitr::opts_chunk$set(error = TRUE)
+```
+
+```{r}
+df <-read.table("/Users/cassiechen/Downloads/Breast_cancer_Table_1_2_Collet.txt")
+library(survival)
+```
+
+## a)Compute the Nelson-Aalen estimator of H(t)
+```{r}
+fit <- survfit(Surv(V2,V3)~1,data=df,conf.type="plain" )
+h_j <- fit$n.event/fit$n.risk
+Ht_NA <- cumsum(h_j)
+t_j <- fit$time
+d_j <- fit$n.event
+Y_j <- fit$n.risk
+df1  <- data.frame(tj = t_j, dj = d_j, Yj = Y_j, hj = h_j,Ht_NA =Ht_NA)
+df1
+```
+
+## b) Compute 95% CI for H(t). Assume hat H(t) follows a normal distribution.
+```{r}
+sd_Ht= sqrt(cumsum(fit$n.event/(fit$n.risk)^2))
+Upper_CI_1 <- Ht_NA + 1.96*sd_Ht
+Lower_CI_1 <- Ht_NA - 1.96*sd_Ht
+CI_Ht_normal <-data.frame(sd_Ht= sd_Ht,Upper_CI = Upper_CI_1,Lower_CI = Lower_CI_1)
+CI_Ht_normal
+```
+## c) Compute 95% CI for H(t). Assume log hat H(t) follows a normal distribution.
+```{r}
+var_ht = cumsum(fit$n.event/(fit$n.risk)^2)
+sd_log_Ht = sqrt((1/(df1$Ht_NA)^2)*var_ht)
+Upper_CI_2 <- Ht_NA + exp(1.96*sd_log_Ht)
+Lower_CI_2 <- Ht_NA - exp(1.96*sd_log_Ht)
+CI_Ht_log <-data.frame(sd_log_Ht = sd_log_Ht,Lower_CI = Lower_CI_2,Upper_CI = Upper_CI_2)
+CI_Ht_log
+```
+
+## d) Estimate S(t) using the Nelson -Aalen prodecure, then compute 95% confidence intervals for and assuming that log(hat_H(t)) follows the normal distribution.
+```{r}
+df1$S_NA_t <- exp(-Ht_NA)
+Upper_CI_3 = df1$S_NA_t + exp(-exp(1.96*sd_log_Ht))
+Lower_CI_3 = df1$S_NA_t - exp(-exp(1.96*sd_log_Ht))
+CI_St_log = data.frame(S_NA_t=df1$S_NA_t, sd_log_Ht=sd_log_Ht,Lower_CI = Lower_CI_3, Upper_CI = Upper_CI_3)
+CI_St_log
+```
+
+## e) etimate the median and quartiles of the survival distribution.
+```{r}
+quantile(df1$S_NA_t)
+```
+
+## f)  Estimate mean residual life,E[T−t|T > t], truncated at 15 years, at all observed death times prior to 15 years.
+t0 = 5 years, truncated at 15 years, which is t =180
+```{r}
+index = which(df1$tj <= 180)
+inter_i <- 0
+for (i in 1:length(index)){
+  inter_i[i] <- (df1$tj[i+1] - df1$tj[i])* df1$S_NA_t[i]
+}
+sum(inter_i)/df1$S_NA_t[index[1]]
+```

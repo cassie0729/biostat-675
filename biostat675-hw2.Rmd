@@ -1,0 +1,196 @@
+---
+title: "hw2 biostat675"
+author: "Nianlin Chen"
+date: "10/12/2021"
+output:
+  pdf_document:
+    latex_engine: xelatex
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, echo=FALSE}
+knitr::opts_chunk$set(error = TRUE)
+```
+
+```{r}
+library(haven)
+df <-read_sas("/Users/cassiechen/Downloads/anemia2.sas7bdat")
+library(survival)
+library(dplyr)
+library(muhaz)
+```
+
+## Problem 1
+## (a) Carry out separate two-sided log rank and Wilcoxon tests in order to determine which of the following predict time until GVHD:
+By age < 19 and > 20
+```{r}
+km.age<- survfit(Surv(obs_time, GVHD == 1) ~ (age > 19), data = df)
+hj.1 = km.age[1]$n.event/km.age[1]$n.risk
+hj.2 = km.age[2]$n.event/km.age[2]$n.risk
+par(mfrow=c(3,1),mar=c(1,10,3,3))
+
+#plot the survival function
+plot(km.age,col=c("red","black"), lty=1:4, main = "survival function by age")
+legend("topright", legend=c("age <= 19", "age >= 20"),col=c("red","black"),
+       lty=1:4)
+
+#plot the hazard function
+plot(km.age[2]$time, hj.2, xlab = "time", ylab = "hj", type = "b",
+     col="black",main = "hazard function by age", lty = 1)
+lines(km.age[1]$time, hj.1,type = "b",col = "red", lty = 1)
+legend("topright", legend=c("age <= 19", "age >= 20"),col=c("red","black"),
+       lty=1:4)
+
+#plot the cumulative hazard function
+plot(km.age[1]$time, km.age[1]$cumhaz, xlab =  "time", ylab="Hj",
+     type="b",col="red",main = "cumulative hazard function by age",lty=1,
+     ylim=c(0,0.9)) 
+lines(km.age[2]$time, km.age[2]$cumhaz,type = "b",col = "black", lty = 1)
+legend("topright", legend=c("age <= 19", "age >= 20"),col=c("red","black"),
+       lty=1:4)
+```
+
+```{r}
+#Wilcoxon test
+wil.test.age = survdiff(Surv(obs_time, GVHD ==1) ~ (age <= 19), data = df, rho=1)
+pvalue.wil=round(1-pchisq(wil.test.age$chisq,1),4)
+# two sided log rank test
+logrank.test.age = survdiff(Surv(obs_time, GVHD ==1) ~ (age <= 19), data = df)
+pvalue.logrank=round(1-pchisq(logrank.test.age$chisq,1),4)
+```
+
+Test, Test-Statistics, and P-value for age:
+```{r}
+tab1 <- matrix(c(5.06,5.01,pvalue.wil,pvalue.logrank), ncol=2, byrow=TRUE)
+colnames(tab1) <- c('Wilcoxon test','log rank test')
+rownames(tab1) <- c("test-statistics",'p-value')
+tab1
+```
+
+By LAF
+```{r}
+km.LAF<- survfit(Surv(obs_time, GVHD == 1) ~ (LAF), data = df)
+hjlaf.1 = km.LAF[1]$n.event/km.LAF[1]$n.risk
+hjlaf.2 = km.LAF[2]$n.event/km.LAF[2]$n.risk
+par(mfrow=c(3,1),mar=c(1,10,3,3))
+
+#plot the survival function
+plot(km.LAF,col=c("red","black"), lty=1:4, main = "survival function by LAF")
+legend("topright", legend=c("LAF = 0","LAF = 1"),col=c("red","black"), lty=1:4)
+
+#plot the hazard function
+plot(km.LAF[2]$time, hjlaf.2, xlab = "time", ylab = "hj", type = "b",
+     col="black",main = "hazard function by LAF", lty = 1,ylim = c(0,0.2))
+lines(km.LAF[1]$time, hjlaf.1,type = "b",col = "red", lty = 1)
+legend("topright", legend=c("LAF =0", "LAF =1"),col=c("red","black"), lty=1:4)
+
+#plot the cumulative hazard function
+plot(km.LAF[1]$time, km.LAF[1]$cumhaz, xlab =  "time", ylab="Hj",
+     type="b",col="red",main = "cumulative hazard function by LAF",lty=1)
+lines(km.LAF[2]$time, km.LAF[2]$cumhaz,type = "b",col = "black", lty = 1)
+legend("topright", legend=c("LAF =0", "LAF =1"),col=c("red","black"), lty=1:4)
+```
+
+```{r}
+#Wilcoxon test
+wil.test.laf = survdiff(Surv(obs_time, GVHD ==1) ~ (LAF), data = df, rho=1)
+pvalue.wil.laf=round(1-pchisq(wil.test.laf$chisq,1),4)
+# two sided log rank test
+logrank.test.laf = survdiff(Surv(obs_time, GVHD ==1) ~ (LAF), data = df)
+pvalue.logrank.laf=round(1-pchisq(logrank.test.laf$chisq,1),4)
+```
+
+Test, Test-Statistics, and P-value for LAF:
+```{r}
+tab2 <- matrix(c(0.125,0.201,pvalue.wil.laf,pvalue.logrank.laf), ncol=2, byrow=TRUE)
+colnames(tab2) <- c('Wilcoxon test','log rank test')
+rownames(tab2) <- c("test-statistics",'p-value')
+tab2
+```
+
+By CSP&MTX
+```{r}
+km.CSP<- survfit(Surv(obs_time, GVHD == 1) ~ (CSP_MTX), data = df)
+hjcsp.1 = km.CSP[1]$n.event/km.CSP[1]$n.risk
+hjcsp.2 = km.CSP[2]$n.event/km.CSP[2]$n.risk
+par(mfrow=c(3,1),mar=c(1,12,3,2))
+
+#plot the survival function
+plot(km.CSP,col=c("red","black"), lty=1:4, main = "survival function by CSP_MTX")
+legend("topright", legend=c("CSP_MTX = 0","CSP_MTX = 1"),col=c("red","black"),
+       lty=1:4)
+
+#plot the hazard function
+plot(km.CSP[2]$time, hjcsp.2, xlab = "time", ylab = "hj", type = "b",
+     col="black",main = "hazard function by CSP_MTX", lty = 1,ylim=c(0,0.2))
+lines(km.CSP[1]$time, hjcsp.1,type = "b",col = "red", lty = 1)
+legend("topright", legend=c("CSP_MTX =0", "CSP_MTX =1"),col=c("red","black"),
+       lty=1:4)
+
+#plot the cumulative hazard function
+plot(km.CSP[1]$time, km.CSP[1]$cumhaz, xlab =  "time", ylab="Hj", type="b",
+     col="red",main = "cumulative hazard function by CSP_MTX",lty=1,ylim=c(0,0.9))
+lines(km.CSP[2]$time, km.CSP[2]$cumhaz,type = "b",col = "black", lty = 1)
+legend("topright", legend=c("CSP_MTX =0", "CSP_MTX =1"),col=c("red","black"), 
+      lty=1:4)
+```
+
+```{r}
+#Wilcoxon test
+wil.test.csp = survdiff(Surv(obs_time, GVHD ==1) ~ (CSP_MTX), data = df, rho=1)
+pvalue.wil.csp=round(1-pchisq(wil.test.csp$chisq,1),4)
+# two sided log rank test
+logrank.test.csp = survdiff(Surv(obs_time, GVHD ==1) ~ (CSP_MTX), data = df)
+pvalue.logrank.csp=round(1-pchisq(logrank.test.csp$chisq,1),4)
+```
+
+Test, Test-Statistics, and P-value for CSP_MTX:
+```{r}
+tab3 <- matrix(c(4.36,5.46,pvalue.wil.csp,pvalue.logrank.csp), ncol=2, byrow=TRUE)
+colnames(tab3) <- c('Wilcoxon test','log rank test')
+rownames(tab3) <- c("test-statistics",'p-value')
+tab3
+```
+
+## (b) The log rank and Wilcoxon tests give slightly different answers for the test of CSP&MTX, but very similar answers for age group. Explain briefly why this is.
+From the survival function plots, we can see for the test of CSP$MTX, the survival functions have similar shapes, and CPS&MTX = 0 goes lower. Also, for the test of age, the survival function of different LAF groups are similar shape. However, for the test of age, the survival function different shape, which might casue the sightly different in p-value of these two tests.
+
+## (c) Carry out a log rank test of CSP&MTX, but stratified on age group. Note: you could use PROC SORT to sort your data set by age group, then run PROC LIFETEST or use R by age group, and combine the results.
+
+```{r}
+age1 = df %>% filter(age <= 19)
+age2 = df %>% filter(age >= 20)
+survdiff(Surv(obs_time, GVHD ==1) ~ (CSP_MTX), data = age1)
+survdiff(Surv(obs_time, GVHD ==1) ~ (CSP_MTX), data = age2)
+survdiff(Surv(obs_time, GVHD ==1) ~ (CSP_MTX) +strata(age <=19), data = df)
+```
+The log ran test for CSP&MXT stratified on age group with test statistics 6.9.
+
+## (d) With respect to the CSP&MTX effect, briefly describe what, in aggregate, your tests indicate regarding confounding and/or interaction
+From the test statistics of previous results, noticed that CPS&MXT mainly effect the older groups, which is age >= 20 group, since the log rank test statistics for CSP&MXT on older group is 8.48 and p-value = 0.009. However, for the younger group, age <= 19, the test statistics is 0.0519 and p-value = 0, which indicates a strong interaction respect to CSP&MTX stratified on different age group. 
+
+## Problem 2
+## (a) Use the SAS or R smooth package to obtain a smoothed plot of the hazard function for the data set as a whole. You need not determine the optimal bandwidth, but try a few values of b and compare the plots.
+```{r}
+par(mfrow=c(3,2), mar = c(1,10,3,1))
+fit1 <- muhaz(df$obs_time, df$GVHD,min.time = 0,max.time = 365, bw.grid=1)
+plot(fit1)
+fit4 <-muhaz(df$obs_time, df$GVHD,min.time = 0,max.time = 365, bw.grid=5)
+plot(fit4) 
+fit5 <-muhaz(df$obs_time, df$GVHD,min.time = 0,max.time = 365, bw.grid=10)
+plot(fit5) 
+fit2 <- muhaz(df$obs_time, df$GVHD,min.time = 0,max.time = 365, bw.method = 'g')
+plot(fit2)
+fit3 <-muhaz(df$obs_time, df$GVHD,min.time = 0,max.time = 365, bw.grid = 25)
+plot(fit3)
+fit6 <-muhaz(df$obs_time, df$GVHD,min.time = 0,max.time = 365, bw.grid = 50)
+plot(fit6)
+```
+
+## (b) Thinking back to the results from Q1, one might suspect (even before plotting H(t)) that the plot will take on a strange and (on the surface) implausible shape; even with a good choice of bandwidth. Why would this be?
+
+From the hazard function plots in the previous problem, we can see the hazard function drop to zero around t = 50. From the data set, it is clear to see that there are lots of points of failure time GVHD=1 before t = 50,and there are bunches of censoring time GVHD = 0 at t = 365. It might causes hazard function drop to 0 around after t = 50, which the reasons why the hazard functions are implausible shape, even with a good choice of bandwitdth. 
+
